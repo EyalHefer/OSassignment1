@@ -120,10 +120,13 @@ UPROGS=\
 	$U/_echo\
 	$U/_forktest\
 	$U/_grep\
+	$U/_helloworld\
+	$U/_helloworld_test\
 	$U/_init\
 	$U/_kill\
 	$U/_ln\
 	$U/_ls\
+	$U/_memsize_test\
 	$U/_mkdir\
 	$U/_rm\
 	$U/_sh\
@@ -131,8 +134,7 @@ UPROGS=\
 	$U/_usertests\
 	$U/_grind\
 	$U/_wc\
-	$U/_zombie\
-	$U/_helloworld
+	$U/_zombie
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)
@@ -158,7 +160,6 @@ CPUS := 3
 endif
 
 QEMUOPTS = -machine virt -bios none -kernel $K/kernel -m 128M -smp $(CPUS) -nographic
-QEMUOPTS += -global virtio-mmio.force-legacy=false
 QEMUOPTS += -drive file=fs.img,if=none,format=raw,id=x0
 QEMUOPTS += -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
 
