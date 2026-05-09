@@ -7,6 +7,8 @@
 #include "spinlock.h"
 #include "proc.h"
 
+extern struct proc proc[];
+
 uint64
 sys_exit(void)
 {
@@ -100,4 +102,82 @@ uint64
 sys_memsize(void)
 {
   return myproc()->sz;
+}
+
+uint64
+sys_co_yield(void)
+{
+  int target_pid, value;
+  struct proc *p = myproc();
+  struct proc *target = 0;
+  // Fetch arguments from the user stack.
+  if(argint(0, &target_pid) < 0 || argint(1, &value) < 0)
+    return -1;
+
+  // sanity checks.
+  if(target_pid <= 0 || target_pid == p->pid)
+    return -1;
+
+  if(p->killed)
+    return -1;
+
+  // Find the target process by pid. Hold its lock to prevent it from exiting
+  for(struct proc *pp = proc; pp < &proc[NPROC]; pp++){
+    acquire(&pp->lock);
+    if(pp->pid == target_pid){
+      // Check if the target is killed while we were looking for it.
+      if(pp->killed){
+        release(&pp->lock);
+        return -1;
+      }
+      target = pp;
+      break;  // keep lock held
+    }
+    release(&pp->lock);
+  }
+  // If we didn't find the target, or if it is in an invalid state, return -1.
+  if(target == 0)
+    return -1;
+
+  // If the target is sleeping on us, we can directly wake it up and pass the value.
+  if(target->state == SLEEPING && target->chan == (void*)p){
+    int received_value = (int)target->trapframe->a0;
+    target->trapframe->a0 = (uint64)value;
+    p->trapframe->a0 = received_value;
+    target->state = RUNNING;
+    acquire(&p->lock);
+    p->chan = (void*)target;
+    p->state = SLEEPING;
+    
+    struct cpu *c = mycpu();
+    c->proc = target;
+    
+    release(&p->lock);
+    swtch(&p->context, &target->context);
+
+    c->proc = p;
+    p->chan = 0;
+    release(&p->lock);
+
+    if(p->killed)
+      return -1;
+
+    return p->trapframe->a0;
+  
+  // Otherwise, we need to sleep on the target and wait for it to wake us up.
+  } else {
+
+    p->trapframe->a0 = (uint64)value;
+    release(&target->lock);
+
+    acquire(&p->lock);
+    p->chan = (void*)target;
+    p->state = SLEEPING;
+    sched();  // go through scheduler
+    p->chan = 0;
+    release(&p->lock);
+
+    // Our a0 was overwritten by the process that woke us.
+    return p->trapframe->a0;
+  }
 }
