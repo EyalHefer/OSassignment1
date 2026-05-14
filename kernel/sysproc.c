@@ -107,7 +107,7 @@ sys_memsize(void)
 uint64
 sys_co_yield(void)
 {
-
+  
   int target_pid, value;
   struct proc *p = myproc();
   struct proc *target = 0;
@@ -153,11 +153,13 @@ sys_co_yield(void)
     acquire(&p->lock);
     p->chan = (void*)target;
     p->state = SLEEPING;
-
+    
+    // switch to the target process and let it run.
     struct cpu *c = mycpu();
     c->proc = target;
-    /* Like sched(): hold p->lock across swtch so we still own it when we resume. */
+    release(&p->lock);
     swtch(&p->context, &target->context);
+    // after the target process runs and yields back to us, we will continue from here.
     c->proc = p;
     p->chan = 0;
     release(&p->lock);
