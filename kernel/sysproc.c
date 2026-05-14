@@ -107,7 +107,7 @@ sys_memsize(void)
 uint64
 sys_co_yield(void)
 {
-  
+
   int target_pid, value;
   struct proc *p = myproc();
   struct proc *target = 0;
